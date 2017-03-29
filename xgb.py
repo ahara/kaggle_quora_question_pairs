@@ -169,7 +169,7 @@ if __name__ == '__main__':
     params['subsample'] = 0.8
     params['max_delta_step'] = 1
     params['min_child_weight'] = 2
-    #params['scale_pos_weight'] = 0.165 / (1 - 0.165)
+    params['scale_pos_weight'] = 0.165 / (1 - 0.165)
 
     d_train = xgb.DMatrix(x_train, label=y_train, missing=MISSING)
     d_valid = xgb.DMatrix(x_valid, label=y_valid, missing=MISSING)
