@@ -174,14 +174,14 @@ if __name__ == '__main__':
     x_train2 = pd.concat([x_train, x_valid])
     y_train2 = pd.concat([y_train, y_valid])
 
-    d_train = xgb.DMatrix(x_train2, label=y_train2, missing=MISSING)
+    d_train = xgb.DMatrix(x_train, label=y_train, missing=MISSING)
     d_valid = xgb.DMatrix(x_valid, label=y_valid, missing=MISSING)
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
 
     print 'Start training'
 
-    bst = xgb.train(params, d_train, 600, watchlist, early_stopping_rounds=50, verbose_eval=10)
+    bst = xgb.train(params, d_train, 1000, watchlist, early_stopping_rounds=50, verbose_eval=10)
 
     del d_train, d_valid
 
