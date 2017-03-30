@@ -171,7 +171,10 @@ if __name__ == '__main__':
     params['min_child_weight'] = 2
     params['scale_pos_weight'] = 0.165 / (1 - 0.165)
 
-    d_train = xgb.DMatrix(x_train, label=y_train, missing=MISSING)
+    x_train2 = pd.concat([x_train, x_valid])
+    y_train2 = pd.concat([y_train, y_valid])
+
+    d_train = xgb.DMatrix(x_train2, label=y_train2, missing=MISSING)
     d_valid = xgb.DMatrix(x_valid, label=y_valid, missing=MISSING)
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
