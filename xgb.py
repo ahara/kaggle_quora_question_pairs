@@ -171,7 +171,7 @@ if __name__ == '__main__':
     params['subsample'] = 0.8
     params['max_delta_step'] = 1
     params['min_child_weight'] = 2
-    #params['scale_pos_weight'] = 0.165 / (1 - 0.165)
+    params['scale_pos_weight'] = 0.165 / (1 - 0.165)
 
     x_train2 = pd.concat([x_train, x_valid])
     y_train2 = pd.concat([y_train, y_valid])
