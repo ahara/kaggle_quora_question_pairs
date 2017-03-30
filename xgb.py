@@ -142,6 +142,7 @@ def get_train_validation_sets(testset=False, tfidf_obj=None):
         test_id = data['test_id']
         x_test = data.drop(['test_id', 'question1', 'question2'], axis=1)
 
+        x_test.replace([np.inf, -np.inf], np.nan)
         x_test.fillna(MISSING, inplace=True)
 
         return x_test, test_id
@@ -150,6 +151,7 @@ def get_train_validation_sets(testset=False, tfidf_obj=None):
         y_train = data['is_duplicate']
         x_train = data.drop(['id', 'qid1', 'qid2', 'question1', 'question2', 'is_duplicate'], axis=1)
 
+        x_train.replace([np.inf, -np.inf], np.nan)
         x_train.fillna(MISSING, inplace=True)
 
         x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
@@ -164,24 +166,24 @@ if __name__ == '__main__':
     params = {}
     params['objective'] = 'binary:logistic'
     params['eval_metric'] = 'logloss'
-    params['eta'] = 0.05  # 0.05
+    params['eta'] = 0.0125  # 0.05
     params['max_depth'] = 16  # 11
     params['subsample'] = 0.8
     params['max_delta_step'] = 1
     params['min_child_weight'] = 2
-    params['scale_pos_weight'] = 0.165 / (1 - 0.165)
+    #params['scale_pos_weight'] = 0.165 / (1 - 0.165)
 
     x_train2 = pd.concat([x_train, x_valid])
     y_train2 = pd.concat([y_train, y_valid])
 
-    d_train = xgb.DMatrix(x_train, label=y_train, missing=MISSING)
+    d_train = xgb.DMatrix(x_train2, label=y_train2, missing=MISSING)
     d_valid = xgb.DMatrix(x_valid, label=y_valid, missing=MISSING)
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
 
     print 'Start training'
 
-    bst = xgb.train(params, d_train, 1000, watchlist, early_stopping_rounds=50, verbose_eval=10)
+    bst = xgb.train(params, d_train, 2400, watchlist, early_stopping_rounds=50, verbose_eval=10)
 
     del d_train, d_valid
 
