@@ -202,7 +202,7 @@ def main():
             neg_train = pd.concat([neg_train, neg_train])
             scale -= 1
         neg_train = pd.concat([neg_train, neg_train[:int(scale * len(neg_train))]])
-        print("Oversampling done, new proportion: {}".format(len(pos_train) / (len(pos_train) + len(neg_train))))
+        print("Oversampling done, new proportion: {}".format(len(pos_train) / float(len(pos_train) + len(neg_train))))
 
         x_train = pd.concat([pos_train, neg_train])
         y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist()
