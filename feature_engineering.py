@@ -17,6 +17,8 @@ from scipy.stats import skew, kurtosis
 from scipy.spatial.distance import cosine, cityblock, jaccard, canberra, euclidean, minkowski, braycurtis
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+import magic_feature_1
+
 
 stop_words = set(stopwords.words('english'))
 
@@ -114,13 +116,15 @@ def get_metrics(q1, q2, model):
 
 train = pd.read_csv('../data/train.csv', encoding='utf-8')
 test = pd.read_csv('../data/test.csv', encoding='utf-8')
+
+magic_1 = magic_feature_1.magic_feature_1(train, test)
 tfidf = TfidfVectorizer(stop_words='english', ngram_range=(1, 1))
 tfidf_txt = pd.Series(train['question1'].tolist() + train['question2'].tolist() + test['question1'].tolist() + test['question2'].tolist()).astype(unicode)
 tfidf.fit_transform(tfidf_txt)
 del train, test, tfidf_txt
 
 
-for fname in ['train', 'train_reverse', 'test']:
+for fname in ['train', 'test']:
     if 'reverse' in fname:
         dataset = pd.read_csv('../data/%s.csv' % fname.replace('_reverse', ''), encoding='utf-8')
         dataset.rename(index=str, columns={'qid1': 'qid2', 'qid2': 'qid1', 'question1': 'question2',
@@ -139,6 +143,10 @@ for fname in ['train', 'train_reverse', 'test']:
 
         batch_end = min(batch_end, dataset.shape[0])
         data = dataset.loc[batch_start:batch_end, :].copy()
+
+        print 'Magic feature 1'
+        data.loc[:, 'm1_q1_freq'] = magic_1[fname].loc[batch_start:batch_end, 'm1_q1_freq']
+        data.loc[:, 'm1_q2_freq'] = magic_1[fname].loc[batch_start:batch_end, 'm1_q2_freq']
 
         print 'Make basic features'
         data.loc[:, 'len_q1'] = data.question1.apply(lambda x: len(unicode(x)))
@@ -286,8 +294,8 @@ for fname in ['train', 'train_reverse', 'test']:
                                  'z_len1', 'z_len2', 'z_word_len1', 'z_word_len2', 'z_match_ratio',
                                  'z_word_match', 'z_tfidf_sum1', 'z_tfidf_sum2', 'z_tfidf_mean1',
                                  'z_tfidf_mean2', 'z_tfidf_len1', 'z_tfidf_len2')].fillna(0))
-        data = data.replace([np.inf, -np.inf], np.nan)
+        data.replace([np.inf, -np.inf], np.nan, inplace=True)
 
         print 'Save results'
         #data.to_csv('../data/train_features_%d_%d.csv' % (batch_start, batch_end), index=False)
-        data.to_csv('../data/%s_features_v2.csv' % fname, index=False, encoding='utf-8')
+        data.to_csv('../data/%s_features_v3.csv' % fname, index=False, encoding='utf-8')
