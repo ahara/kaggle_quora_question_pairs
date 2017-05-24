@@ -81,34 +81,14 @@ if __name__ == '__main__':
     print 'Start training'
 
     bst = xgb.train(params, d_train, 2400, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
-    del d_train, d_valid
-
-    clf = ExtraTreesClassifier(n_estimators=600, criterion='entropy', random_state=999,
-                               class_weight=class_weights)
-    clf.fit(x_train, y_train)
-    et_preds = clf.predict_proba(x_valid)
-    print 'Extra Trees:', log_loss(y_valid, et_preds)
-
-    xgb_preds = bst.predict(xgb.DMatrix(x_valid, missing=MISSING))
-    print 'XGB and Extra Trees:', log_loss(y_valid, (0.1 * et_preds[:, 1] + 0.9 * xgb_preds))
-
-    import pdb
-    pdb.set_trace()
-
-    del x_train, x_valid, et_preds, xgb_preds
+    del d_train, d_valid, x_train, x_valid
 
     x_test, test_id = get_train_validation_sets(testset=True)
 
-    et_preds = clf.predict_proba(x_test)
-    del clf
     xgb_preds = bst.predict(xgb.DMatrix(x_test, missing=MISSING))
-    preds = (0.1 * et_preds[:, 1] + 0.9 * xgb_preds)  # Ensemble XGBoost and ExtraTrees
 
     print("Writing output...")
     sub = pd.DataFrame()
     sub['test_id'] = test_id
-    sub['is_duplicate'] = preds
+    sub['is_duplicate'] = xgb_preds
     sub.to_csv('xgb_preds.csv', index=False)
-
-    import pdb
-    pdb.set_trace()
