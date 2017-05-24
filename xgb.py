@@ -17,7 +17,7 @@ def load_data(file_name):
 
 
 def get_train_validation_sets(testset=False, reverse=False):
-    data = load_data('test_features_v2.csv' if testset else 'train_features_v2.csv')
+    data = load_data('test_features_v3.csv' if testset else 'train_features_v3.csv')
     data.fillna(MISSING, inplace=True)
 
     if testset:
@@ -32,7 +32,7 @@ def get_train_validation_sets(testset=False, reverse=False):
         x_train = data.drop(['id', 'qid1', 'qid2', 'question1', 'question2', 'is_duplicate'], axis=1)
 
         if reverse:
-            train_reverse = load_data('train_reverse_features_v2.csv')
+            train_reverse = load_data('train_reverse_features_v3.csv')
             train_reverse.fillna(MISSING, inplace=True)
             y_train_reverse = train_reverse['is_duplicate']
             x_train_reverse = train_reverse.drop(['id', 'qid1', 'qid2', 'question1', 'question2', 'is_duplicate'], axis=1)
@@ -52,7 +52,7 @@ def get_train_validation_sets(testset=False, reverse=False):
 
 
 if __name__ == '__main__':
-    submission_mode = True
+    submission_mode = False
     x_train, x_valid, y_train, y_valid = get_train_validation_sets(reverse=False)
     #x_train, x_valid, y_train, y_valid, x_valid_reverse = get_train_validation_sets(reverse=True)
 
@@ -85,23 +85,19 @@ if __name__ == '__main__':
 
     clf = ExtraTreesClassifier(n_estimators=600, criterion='entropy', random_state=999,
                                class_weight=class_weights)
-    x_train2 = x_train.replace([np.inf, -np.inf], np.nan).fillna(MISSING)
-    x_valid2 = x_valid.replace([np.inf, -np.inf], np.nan).fillna(MISSING)
-    clf.fit(x_train2, y_train)
-    et_preds = clf.predict_proba(x_valid2)
+    clf.fit(x_train, y_train)
+    et_preds = clf.predict_proba(x_valid)
     print 'Extra Trees:', log_loss(y_valid, et_preds)
 
-    xgb_preds = bst.predict(xgb.DMatrix(x_valid.fillna(MISSING), missing=MISSING))
+    xgb_preds = bst.predict(xgb.DMatrix(x_valid, missing=MISSING))
     print 'XGB and Extra Trees:', log_loss(y_valid, (0.1 * et_preds[:, 1] + 0.9 * xgb_preds))
 
-    #import pdb
-    #pdb.set_trace()
+    import pdb
+    pdb.set_trace()
 
-    del x_train, x_valid, x_train2, x_valid2, et_preds, xgb_preds
+    del x_train, x_valid, et_preds, xgb_preds
 
     x_test, test_id = get_train_validation_sets(testset=True)
-    x_test.replace([np.inf, -np.inf], np.nan, inplace=True)
-    x_test.fillna(MISSING, inplace=True)
 
     et_preds = clf.predict_proba(x_test)
     del clf
