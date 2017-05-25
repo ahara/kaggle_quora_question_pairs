@@ -18,6 +18,7 @@ from scipy.spatial.distance import cosine, cityblock, jaccard, canberra, euclide
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 import magic_feature_1
+import magic_feature_2
 
 
 stop_words = set(stopwords.words('english'))
@@ -118,6 +119,7 @@ train = pd.read_csv('../data/train.csv', encoding='utf-8')
 test = pd.read_csv('../data/test.csv', encoding='utf-8')
 
 magic_1 = magic_feature_1.magic_feature_1(train, test)
+magic_2 = magic_feature_2.magic_feature_2(train, test)
 tfidf = TfidfVectorizer(stop_words='english', ngram_range=(1, 1))
 tfidf_txt = pd.Series(train['question1'].tolist() + train['question2'].tolist() + test['question1'].tolist() + test['question2'].tolist()).astype(unicode)
 tfidf.fit_transform(tfidf_txt)
@@ -147,6 +149,10 @@ for fname in ['train', 'test']:
         print 'Magic feature 1'
         data.loc[:, 'm1_q1_freq'] = magic_1[fname].loc[batch_start:batch_end, 'm1_q1_freq']
         data.loc[:, 'm1_q2_freq'] = magic_1[fname].loc[batch_start:batch_end, 'm1_q2_freq']
+
+        print 'Magic feature 2'
+        data.loc[:, 'm2_q1_q2_intersect'] = magic_2[fname].loc[batch_start:batch_end, 'm2_q1_q2_intersect']
+        data.loc[:, 'm2_q1_q2_intersect'] = magic_2[fname].loc[batch_start:batch_end, 'm2_q1_q2_intersect']
 
         print 'Make basic features'
         data.loc[:, 'len_q1'] = data.question1.apply(lambda x: len(unicode(x)))

@@ -52,7 +52,7 @@ def get_train_validation_sets(testset=False, reverse=False):
 
 
 if __name__ == '__main__':
-    submission_mode = False
+    submission_mode = True
     x_train, x_valid, y_train, y_valid = get_train_validation_sets(reverse=False)
     #x_train, x_valid, y_train, y_valid, x_valid_reverse = get_train_validation_sets(reverse=True)
 
