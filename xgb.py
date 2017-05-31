@@ -35,7 +35,7 @@ def get_train_validation_sets(testset=False):
 
 
 if __name__ == '__main__':
-    submission_mode = True
+    submission_mode = False
     x_train, x_valid, y_train, y_valid = get_train_validation_sets()
 
     # Set our parameters for xgboost
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     params = {}
     params['objective'] = 'binary:logistic'
     params['eval_metric'] = 'logloss'
-    params['eta'] = 0.0125  # 0.0125 - 2400 iter, 0.05 - 600 iter
+    params['eta'] = 0.05  # 0.0125 - 2400 iter, 0.05 - 600 iter
     params['max_depth'] = 16  # 11
     params['subsample'] = 0.8
     params['max_delta_step'] = 1
@@ -61,13 +61,16 @@ if __name__ == '__main__':
 
     print 'Start training'
 
-    bst = xgb.train(params, d_train, 2400, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
+    bst = xgb.train(params, d_train, 600, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
     xgb_preds_valid = bst.predict(d_valid)
     val = pd.DataFrame()
     val['test_id'] = range(x_valid.shape[0])
     val['is_duplicate'] = xgb_preds_valid
     val.to_csv('xgb_valid.csv', index=False)
     del d_train, d_valid, x_train, x_valid, val, xgb_preds_valid
+
+    if not submission_mode:
+        exit(0)
 
     x_test, test_id = get_train_validation_sets(testset=True)
 
