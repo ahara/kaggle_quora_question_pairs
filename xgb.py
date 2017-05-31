@@ -2,8 +2,6 @@
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.metrics import log_loss
 from sklearn.model_selection import train_test_split
 
 
@@ -16,7 +14,7 @@ def load_data(file_name):
     return data
 
 
-def get_train_validation_sets(testset=False, reverse=False):
+def get_train_validation_sets(testset=False):
     data = load_data('test_features_v3.csv' if testset else 'train_features_v3.csv')
     data.fillna(MISSING, inplace=True)
 
@@ -31,30 +29,14 @@ def get_train_validation_sets(testset=False, reverse=False):
         y_train = data['is_duplicate']
         x_train = data.drop(['id', 'qid1', 'qid2', 'question1', 'question2', 'is_duplicate'], axis=1)
 
-        if reverse:
-            train_reverse = load_data('train_reverse_features_v3.csv')
-            train_reverse.fillna(MISSING, inplace=True)
-            y_train_reverse = train_reverse['is_duplicate']
-            x_train_reverse = train_reverse.drop(['id', 'qid1', 'qid2', 'question1', 'question2', 'is_duplicate'], axis=1)
-
-            x_train, x_valid, y_train, y_valid, x_train_reverse, x_valid_reverse,\
-            y_train_reverse, y_valid_reverse = train_test_split(
-                x_train, y_train, x_train_reverse, y_train_reverse, test_size=0.2, random_state=4242)
-
-            return x_train, x_valid, y_train, y_valid, x_valid_reverse
-
-            x_train = pd.concat([x_train, x_train_reverse])
-            y_train = pd.concat([y_train, y_train_reverse])
-        else:
-            x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
+        x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
 
         return x_train, x_valid, y_train, y_valid
 
 
 if __name__ == '__main__':
     submission_mode = True
-    x_train, x_valid, y_train, y_valid = get_train_validation_sets(reverse=False)
-    #x_train, x_valid, y_train, y_valid, x_valid_reverse = get_train_validation_sets(reverse=True)
+    x_train, x_valid, y_train, y_valid = get_train_validation_sets()
 
     # Set our parameters for xgboost
     if submission_mode:
@@ -74,14 +56,18 @@ if __name__ == '__main__':
 
     d_train = xgb.DMatrix(x_train, label=y_train, missing=MISSING)
     d_valid = xgb.DMatrix(x_valid, label=y_valid, missing=MISSING)
-    #d_valid_reverse = xgb.DMatrix(x_valid_reverse, label=y_valid, missing=MISSING)
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
 
     print 'Start training'
 
     bst = xgb.train(params, d_train, 2400, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
-    del d_train, d_valid, x_train, x_valid
+    xgb_preds_valid = bst.predict(d_valid)
+    val = pd.DataFrame()
+    val['test_id'] = range(x_valid.shape[0])
+    val['is_duplicate'] = xgb_preds_valid
+    val.to_csv('xgb_valid.csv', index=False)
+    del d_train, d_valid, x_train, x_valid, val, xgb_preds_valid
 
     x_test, test_id = get_train_validation_sets(testset=True)
 
