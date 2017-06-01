@@ -9,7 +9,7 @@ from magic_feature_3 import magic_feature_3_with_load
 
 MISSING = -99999
 
-magic_3 = magic_feature_3_with_load()
+#magic_3 = magic_feature_3_with_load()
 
 
 def load_data(file_name):
@@ -26,7 +26,7 @@ def get_train_validation_sets(testset=False):
         print 'Prepare test set'
         test_id = data['test_id']
         x_test = data.drop(['test_id', 'question1', 'question2'], axis=1)
-        x_test.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['test'].loc[:, 'm3_q1_q2_pos_intersect']
+        #x_test.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['test'].loc[:, 'm3_q1_q2_pos_intersect']
 
         return x_test, test_id
     else:
@@ -36,8 +36,8 @@ def get_train_validation_sets(testset=False):
 
         x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
 
-        x_train.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['train'].loc[:, 'm3_q1_q2_pos_intersect']
-        x_valid.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['valid'].loc[:, 'm3_q1_q2_pos_intersect']
+        #x_train.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['train'].loc[:, 'm3_q1_q2_pos_intersect']
+        #x_valid.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['valid'].loc[:, 'm3_q1_q2_pos_intersect']
 
         return x_train, x_valid, y_train, y_valid
 
@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     print 'Start training'
 
-    bst = xgb.train(params, d_train, 2400, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
+    bst = xgb.train(params, d_train, 4800, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
     xgb_preds_valid = bst.predict(d_valid)
     val = pd.DataFrame()
     val['test_id'] = range(x_valid.shape[0])
