@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     print 'Start training'
 
-    bst = xgb.train(params, d_train, 4800, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
+    bst = xgb.train(params, d_train, 1400, watchlist, early_stopping_rounds=50, verbose_eval=10)  # 2400
     xgb_preds_valid = bst.predict(d_valid)
     val = pd.DataFrame()
     val['test_id'] = range(x_valid.shape[0])
