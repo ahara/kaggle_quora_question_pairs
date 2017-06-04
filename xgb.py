@@ -9,7 +9,7 @@ from magic_feature_3 import magic_feature_3_with_load
 
 MISSING = -99999
 
-#magic_3 = magic_feature_3_with_load()
+magic_3 = magic_feature_3_with_load()
 
 
 def load_data(file_name):
@@ -26,7 +26,8 @@ def get_train_validation_sets(testset=False):
         print 'Prepare test set'
         test_id = data['test_id']
         x_test = data.drop(['test_id', 'question1', 'question2'], axis=1)
-        #x_test.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['test'].loc[:, 'm3_q1_q2_pos_intersect']
+        x_test.loc[:, 'm3_qid1_max_kcore'] = magic_3['test'].loc[:, 'm3_qid1_max_kcore']
+        x_test.loc[:, 'm3_qid2_max_kcore'] = magic_3['test'].loc[:, 'm3_qid2_max_kcore']
 
         return x_test, test_id
     else:
@@ -34,10 +35,10 @@ def get_train_validation_sets(testset=False):
         y_train = data['is_duplicate']
         x_train = data.drop(['id', 'qid1', 'qid2', 'question1', 'question2', 'is_duplicate'], axis=1)
 
-        x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
+        x_train.loc[:, 'm3_qid1_max_kcore'] = magic_3['train'].loc[:, 'm3_qid1_max_kcore']
+        x_train.loc[:, 'm3_qid2_max_kcore'] = magic_3['train'].loc[:, 'm3_qid2_max_kcore']
 
-        #x_train.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['train'].loc[:, 'm3_q1_q2_pos_intersect']
-        #x_valid.loc[:, 'm3_q1_q2_pos_intersect'] = magic_3['valid'].loc[:, 'm3_q1_q2_pos_intersect']
+        x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
 
         return x_train, x_valid, y_train, y_valid
 
