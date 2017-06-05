@@ -7,8 +7,8 @@ import pandas as pd
 
 
 def magic_feature_3_with_load():
-    train = pd.read_csv('../data/train.csv')#, encoding='utf-8')
-    test = pd.read_csv('../data/test.csv')#, encoding='utf-8')
+    train = pd.read_csv('../data/train.csv', encoding='utf-8')
+    test = pd.read_csv('../data/test.csv', encoding='utf-8')
     return magic_feature_3(train, test)
 
 
@@ -61,17 +61,12 @@ def get_id(question, dict_questions):
 
 
 def run_kcore():
-    df_train = pd.read_csv("../data/train.csv")
-    #qid_dict = create_qid_dict(df_train)
-    #print('Question dictionary size:', len(qid_dict))
-    df_test = pd.read_csv("../data/test.csv")
-    #df_test.loc[:, 'qid1'] = df_test.loc[:, 'question1'].apply(get_id, dict_questions=qid_dict)
-    #df_test.loc[:, 'qid2'] = df_test.loc[:, 'question2'].apply(get_id, dict_questions=qid_dict)
+    df_train = pd.read_csv("../data/train.csv", encoding='utf-8')
+    df_test = pd.read_csv("../data/test.csv", encoding='utf-8')
     df_train.loc[:, 'qid1'] = df_train.loc[:, 'question1'].apply(hash)
     df_train.loc[:, 'qid2'] = df_train.loc[:, 'question2'].apply(hash)
     df_test.loc[:, 'qid1'] = df_test.loc[:, 'question1'].apply(hash)
     df_test.loc[:, 'qid2'] = df_test.loc[:, 'question2'].apply(hash)
-    #print('Question dictionary size:', len(qid_dict))
     df_all = pd.concat([df_train.loc[:, ["qid1", "qid2"]],
                         df_test.loc[:, ["qid1", "qid2"]]], axis=0).reset_index(drop='index')
     print("df_all.shape:", df_all.shape)  # df_all.shape: (2750086, 2)
