@@ -9,7 +9,7 @@ from xgb import get_train_validation_sets
 #sgd_fm_val = pd.read_csv('../kaggle_quora_benchmark/valid.csv')
 #print log_loss(y_val, xgb_val['is_duplicate'].values * 0.95 + sgd_fm_val['is_duplicate'].values * 0.05)
 
-xgb_preds = pd.read_csv('xgb_preds.csv');
+xgb_preds = pd.read_csv('xgb_preds.csv')
 sgd_fm = pd.read_csv('../kaggle_quora_benchmark/sgd_fm.csv')
 
 sub = pd.DataFrame()
