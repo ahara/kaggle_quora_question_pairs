@@ -1,238 +1,318 @@
+import argparse
+import functools
+from collections import defaultdict
+
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-import operator
-from sklearn.model_selection import train_test_split
-from collections import Counter
+
 from nltk.corpus import stopwords
-import matplotlib.pyplot as plt
+from collections import Counter
+from sklearn.metrics import log_loss
+from sklearn.cross_validation import train_test_split
 
-RS = 12357
-ROUNDS = 315
-MISSING = -99999
-
-print("Started")
-np.random.seed(RS)
-input_folder = '../data/'
+from xgboost import XGBClassifier
 
 
-def train_xgb(X, y, params):
-    print("Will train XGB for {} rounds, RandomSeed: {}".format(ROUNDS, RS))
-    x_train, x_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=RS)
+def word_match_share(row, stops=None):
+    q1words = {}
+    q2words = {}
+    for word in row['question1']:
+        if word not in stops:
+            q1words[word] = 1
+    for word in row['question2']:
+        if word not in stops:
+            q2words[word] = 1
+    if len(q1words) == 0 or len(q2words) == 0:
+        # The computer-generated chaff includes a few questions that are nothing but stopwords
+        return 0
+    shared_words_in_q1 = [w for w in q1words.keys() if w in q2words]
+    shared_words_in_q2 = [w for w in q2words.keys() if w in q1words]
+    R = (len(shared_words_in_q1) + len(shared_words_in_q2))/(len(q1words) + len(q2words))
+    return R
 
-    x_train.fillna(MISSING, inplace=True)
-    x_val.fillna(MISSING, inplace=True)
+def jaccard(row):
+    wic = set(row['question1']).intersection(set(row['question2']))
+    uw = set(row['question1']).union(row['question2'])
+    if len(uw) == 0:
+        uw = [1]
+    return (len(wic) / len(uw))
 
-    xg_train = xgb.DMatrix(x_train, label=y_train, missing=MISSING)
-    xg_val = xgb.DMatrix(x_val, label=y_val, missing=MISSING)
+def common_words(row):
+    return len(set(row['question1']).intersection(set(row['question2'])))
 
-    watchlist = [(xg_train, 'train'), (xg_val, 'eval')]
+def total_unique_words(row):
+    return len(set(row['question1']).union(row['question2']))
 
-    return xgb.train(params, xg_train, ROUNDS, watchlist)
+def total_unq_words_stop(row, stops):
+    return len([x for x in set(row['question1']).union(row['question2']) if x not in stops])
+
+def wc_diff(row):
+    return abs(len(row['question1']) - len(row['question2']))
+
+def wc_ratio(row):
+    l1 = len(row['question1'])*1.0 
+    l2 = len(row['question2'])
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def wc_diff_unique(row):
+    return abs(len(set(row['question1'])) - len(set(row['question2'])))
+
+def wc_ratio_unique(row):
+    l1 = len(set(row['question1'])) * 1.0
+    l2 = len(set(row['question2']))
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def wc_diff_unique_stop(row, stops=None):
+    return abs(len([x for x in set(row['question1']) if x not in stops]) - len([x for x in set(row['question2']) if x not in stops]))
+
+def wc_ratio_unique_stop(row, stops=None):
+    l1 = len([x for x in set(row['question1']) if x not in stops])*1.0 
+    l2 = len([x for x in set(row['question2']) if x not in stops])
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def same_start_word(row):
+    if not row['question1'] or not row['question2']:
+        return np.nan
+    return int(row['question1'][0] == row['question2'][0])
+
+def char_diff(row):
+    return abs(len(''.join(row['question1'])) - len(''.join(row['question2'])))
+
+def char_ratio(row):
+    l1 = len(''.join(row['question1'])) 
+    l2 = len(''.join(row['question2']))
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def char_diff_unique_stop(row, stops=None):
+    return abs(len(''.join([x for x in set(row['question1']) if x not in stops])) - len(''.join([x for x in set(row['question2']) if x not in stops])))
 
 
-def predict_xgb(clr, x_test):
-    return clr.predict(xgb.DMatrix(x_test.fillna(MISSING), missing=MISSING))
+def get_weight(count, eps=10000, min_count=2):
+    if count < min_count:
+        return 0
+    else:
+        return 1 / (count + eps)
+    
+def tfidf_word_match_share_stops(row, stops=None, weights=None):
+    q1words = {}
+    q2words = {}
+    for word in row['question1']:
+        if word not in stops:
+            q1words[word] = 1
+    for word in row['question2']:
+        if word not in stops:
+            q2words[word] = 1
+    if len(q1words) == 0 or len(q2words) == 0:
+        # The computer-generated chaff includes a few questions that are nothing but stopwords
+        return 0
+    
+    shared_weights = [weights.get(w, 0) for w in q1words.keys() if w in q2words] + [weights.get(w, 0) for w in q2words.keys() if w in q1words]
+    total_weights = [weights.get(w, 0) for w in q1words] + [weights.get(w, 0) for w in q2words]
+    
+    R = np.sum(shared_weights) / np.sum(total_weights)
+    return R
+
+def tfidf_word_match_share(row, weights=None):
+    q1words = {}
+    q2words = {}
+    for word in row['question1']:
+        q1words[word] = 1
+    for word in row['question2']:
+        q2words[word] = 1
+    if len(q1words) == 0 or len(q2words) == 0:
+        # The computer-generated chaff includes a few questions that are nothing but stopwords
+        return 0
+    
+    shared_weights = [weights.get(w, 0) for w in q1words.keys() if w in q2words] + [weights.get(w, 0) for w in q2words.keys() if w in q1words]
+    total_weights = [weights.get(w, 0) for w in q1words] + [weights.get(w, 0) for w in q2words]
+    
+    R = np.sum(shared_weights) / np.sum(total_weights)
+    return R
 
 
-def create_feature_map(features):
-    outfile = open('xgb.fmap', 'w')
-    i = 0
-    for feat in features:
-        outfile.write('{0}\t{1}\tq\n'.format(i, feat))
-        i += 1
-    outfile.close()
+def build_features(data, stops, weights):
+    X = pd.DataFrame()
+    f = functools.partial(word_match_share, stops=stops)
+    X['word_match'] = data.apply(f, axis=1, raw=True) #1
+
+    f = functools.partial(tfidf_word_match_share, weights=weights)
+    X['tfidf_wm'] = data.apply(f, axis=1, raw=True) #2
+
+    f = functools.partial(tfidf_word_match_share_stops, stops=stops, weights=weights)
+    X['tfidf_wm_stops'] = data.apply(f, axis=1, raw=True) #3
+
+    X['jaccard'] = data.apply(jaccard, axis=1, raw=True) #4
+    X['wc_diff'] = data.apply(wc_diff, axis=1, raw=True) #5
+    X['wc_ratio'] = data.apply(wc_ratio, axis=1, raw=True) #6
+    X['wc_diff_unique'] = data.apply(wc_diff_unique, axis=1, raw=True) #7
+    X['wc_ratio_unique'] = data.apply(wc_ratio_unique, axis=1, raw=True) #8
+
+    f = functools.partial(wc_diff_unique_stop, stops=stops)    
+    X['wc_diff_unq_stop'] = data.apply(f, axis=1, raw=True) #9
+    f = functools.partial(wc_ratio_unique_stop, stops=stops)    
+    X['wc_ratio_unique_stop'] = data.apply(f, axis=1, raw=True) #10
+
+    X['same_start'] = data.apply(same_start_word, axis=1, raw=True) #11
+    X['char_diff'] = data.apply(char_diff, axis=1, raw=True) #12
+
+    f = functools.partial(char_diff_unique_stop, stops=stops) 
+    X['char_diff_unq_stop'] = data.apply(f, axis=1, raw=True) #13
+
+#     X['common_words'] = data.apply(common_words, axis=1, raw=True)  #14
+    X['total_unique_words'] = data.apply(total_unique_words, axis=1, raw=True)  #15
+
+    f = functools.partial(total_unq_words_stop, stops=stops)
+    X['total_unq_words_stop'] = data.apply(f, axis=1, raw=True)  #16
+    
+    X['char_ratio'] = data.apply(char_ratio, axis=1, raw=True) #17    
+
+    return X
 
 
 def main():
-    params = dict()
-    params['objective'] = 'binary:logistic'
-    params['eval_metric'] = 'logloss'
-    params['eta'] = 0.05  # 0.05
-    params['max_depth'] = 18  # 16
-    params['silent'] = 1
-    params['seed'] = RS
+    parser = argparse.ArgumentParser(description='XGB with Handcrafted Features')
+    parser.add_argument('--save', type=str, default='XGB_leaky',
+                        help='save_file_names')
+    args = parser.parse_args()
 
-    df_train = pd.read_csv(input_folder + 'train.csv')
-    df_test = pd.read_csv(input_folder + 'test.csv')
-    print("Original data: X_train: {}, X_test: {}".format(df_train.shape, df_test.shape))
+    df_train = pd.read_csv('../data/train_features_abhishek.csv', encoding="ISO-8859-1")
+    X_train_ab = df_train.iloc[:, 2:-1]
+    X_train_ab = X_train_ab.drop('euclidean_distance', axis=1)
+    X_train_ab = X_train_ab.drop('jaccard_distance', axis=1)
 
-    print("Features processing, be patient...")
+    df_train = pd.read_csv('../data/train.csv')
+    df_train = df_train.fillna(' ')
 
-    # If a word appears only once, we ignore it completely (likely a typo)
-    # Epsilon defines a smoothing constant, which makes the effect of extremely rare words smaller
-    def get_weight(count, eps=10000, min_count=2):
-        return 0 if count < min_count else 1 / (count + eps)
+    df_test = pd.read_csv('../data/test.csv')
+    ques = pd.concat([df_train[['question1', 'question2']], \
+        df_test[['question1', 'question2']]], axis=0).reset_index(drop='index')
+    q_dict = defaultdict(set)
+    for i in range(ques.shape[0]):
+            q_dict[ques.question1[i]].add(ques.question2[i])
+            q_dict[ques.question2[i]].add(ques.question1[i])
 
-    train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist()).astype(str)
-    words = (" ".join(train_qs)).lower().split()
+    def q1_freq(row):
+        return(len(q_dict[row['question1']]))
+        
+    def q2_freq(row):
+        return(len(q_dict[row['question2']]))
+        
+    def q1_q2_intersect(row):
+        return(len(set(q_dict[row['question1']]).intersection(set(q_dict[row['question2']]))))
+
+    df_train['q1_q2_intersect'] = df_train.apply(q1_q2_intersect, axis=1, raw=True)
+    df_train['q1_freq'] = df_train.apply(q1_freq, axis=1, raw=True)
+    df_train['q2_freq'] = df_train.apply(q2_freq, axis=1, raw=True)
+
+    df_test['q1_q2_intersect'] = df_test.apply(q1_q2_intersect, axis=1, raw=True)
+    df_test['q1_freq'] = df_test.apply(q1_freq, axis=1, raw=True)
+    df_test['q2_freq'] = df_test.apply(q2_freq, axis=1, raw=True)
+
+    test_leaky = df_test.loc[:, ['q1_q2_intersect','q1_freq','q2_freq']]
+    del df_test
+
+    train_leaky = df_train.loc[:, ['q1_q2_intersect','q1_freq','q2_freq']]
+
+    # explore
+    stops = set(stopwords.words("english"))
+
+    df_train['question1'] = df_train['question1'].map(lambda x: str(x).lower().split())
+    df_train['question2'] = df_train['question2'].map(lambda x: str(x).lower().split())
+
+    train_qs = pd.Series(df_train['question1'].tolist() + df_train['question2'].tolist())
+
+    words = [x for y in train_qs for x in y]
     counts = Counter(words)
     weights = {word: get_weight(count) for word, count in counts.items()}
 
-    stops = set(stopwords.words("english"))
-
-    def word_shares(row):
-        q1 = set(str(row['question1']).lower().split())
-        q1words = q1.difference(stops)
-        if len(q1words) == 0:
-            return '0:0:0:0:0'
-
-        q2 = set(str(row['question2']).lower().split())
-        q2words = q2.difference(stops)
-        if len(q2words) == 0:
-            return '0:0:0:0:0'
-
-        q1stops = q1.intersection(stops)
-        q2stops = q2.intersection(stops)
-
-        shared_words = q1words.intersection(q2words)
-        shared_weights = [weights.get(w, 0) for w in shared_words]
-        total_weights = [weights.get(w, 0) for w in q1words] + [weights.get(w, 0) for w in q2words]
-
-        R1 = np.sum(shared_weights) / np.sum(total_weights) #tfidf share
-        R2 = len(shared_words) / (len(q1words) + len(q2words)) #count share
-        R31 = len(q1stops) / len(q1words) #stops in q1
-        R32 = len(q2stops) / len(q2words) #stops in q2
-        return '{}:{}:{}:{}:{}'.format(R1, R2, len(shared_words), R31, R32)
-
-    df = pd.concat([df_train, df_test])
-    df['word_shares'] = df.apply(word_shares, axis=1, raw=True)
-
-    x = pd.DataFrame()
-
-    x['word_match'] = df['word_shares'].apply(lambda x: float(x.split(':')[0]))
-    x['tfidf_word_match'] = df['word_shares'].apply(lambda x: float(x.split(':')[1]))  # Done
-    x['shared_count'] = df['word_shares'].apply(lambda x: float(x.split(':')[2]))  # Done
-
-    x['stops1_ratio'] = df['word_shares'].apply(lambda x: float(x.split(':')[3]))
-    x['stops2_ratio'] = df['word_shares'].apply(lambda x: float(x.split(':')[4]))
-    x['diff_stops_r'] = x['stops1_ratio'] - x['stops2_ratio']
-
-    x['len_q1'] = df['question1'].apply(lambda x: len(str(x)))  # Done
-    x['len_q2'] = df['question2'].apply(lambda x: len(str(x)))  # Done
-    x['diff_len'] = x['len_q1'] - x['len_q2']  # Done
-
-    x['len_char_q1'] = df['question1'].apply(lambda x: len(str(x).replace(' ', '')))  # Done
-    x['len_char_q2'] = df['question2'].apply(lambda x: len(str(x).replace(' ', '')))  # Done
-    x['diff_len_char'] = x['len_char_q1'] - x['len_char_q2']  # Done
-
-    x['len_word_q1'] = df['question1'].apply(lambda x: len(str(x).split()))  # Done
-    x['len_word_q2'] = df['question2'].apply(lambda x: len(str(x).split()))  # Done
-    x['diff_len_word'] = x['len_word_q1'] - x['len_word_q2']  # Done
-
-    x['avg_world_len1'] = x['len_char_q1'] / x['len_word_q1']
-    x['avg_world_len2'] = x['len_char_q2'] / x['len_word_q2']
-    x['diff_avg_word'] = x['avg_world_len1'] - x['avg_world_len2']
-
-    x['exactly_same'] = (df['question1'] == df['question2']).astype(int)
-    x['duplicated'] = df.duplicated(['question1', 'question2']).astype(int)
-
-    # What
-    x['q1_count_word_what'] = df.question1.apply(lambda x: str(x).lower().count('what'))
-    x['q2_count_word_what'] = df.question2.apply(lambda x: str(x).lower().count('what'))
-    x['diff_count_word_what'] = x['q1_count_word_what'] - x['q2_count_word_what']
-    # How
-    x['q1_count_word_how'] = df.question1.apply(lambda x: str(x).lower().count('how'))
-    x['q2_count_word_how'] = df.question2.apply(lambda x: str(x).lower().count('how'))
-    x['diff_count_word_how'] = x['q1_count_word_how'] - x['q2_count_word_how']
-    # Why
-    x['q1_count_word_why'] = df.question1.apply(lambda x: str(x).lower().count('why'))
-    x['q2_count_word_why'] = df.question2.apply(lambda x: str(x).lower().count('why'))
-    x['diff_count_word_why'] = x['q1_count_word_why'] - x['q2_count_word_why']
-    # How many
-    x['q1_count_word_how_many'] = df.question1.apply(lambda x: str(x).lower().count('how many'))
-    x['q2_count_word_how_many'] = df.question2.apply(lambda x: str(x).lower().count('how many'))
-    x['diff_count_word_how_many'] = x['q1_count_word_how_many'] - x['q2_count_word_how_many']
-    # How much
-    x['q1_count_word_how_much'] = df.question1.apply(lambda x: str(x).lower().count('how much'))
-    x['q2_count_word_how_much'] = df.question2.apply(lambda x: str(x).lower().count('how much'))
-    x['diff_count_word_how_much'] = x['q1_count_word_how_much'] - x['q2_count_word_how_much']
-    # If
-    x['q1_count_word_if'] = df.question1.apply(lambda x: str(x).lower().count('if'))
-    x['q2_count_word_if'] = df.question2.apply(lambda x: str(x).lower().count('if'))
-    x['diff_count_word_if'] = x['q1_count_word_if'] - x['q2_count_word_if']
-    # When
-    x['q1_count_word_when'] = df.question1.apply(lambda x: str(x).lower().count('when'))
-    x['q2_count_word_when'] = df.question2.apply(lambda x: str(x).lower().count('when'))
-    x['diff_count_word_when'] = x['q1_count_word_when'] - x['q2_count_word_when']
-    # [math]
-    x['q1_count_symbol_math'] = df.question1.apply(lambda x: str(x).lower().count('[math]'))
-    x['q2_count_symbol_math'] = df.question2.apply(lambda x: str(x).lower().count('[math]'))
-    x['diff_count_symbol_math'] = x['q1_count_symbol_math'] - x['q2_count_symbol_math']
-    # ? (question mark)
-    x['q1_count_symbol_question_mark'] = df.question1.apply(lambda x: str(x).lower().count('?'))
-    x['q2_count_symbol_question_mark'] = df.question2.apply(lambda x: str(x).lower().count('?'))
-    x['diff_count_symbol_question_mark'] = x['q1_count_symbol_question_mark'] - x['q2_count_symbol_question_mark']
-    # . (dot)
-    x['q1_count_symbol_dot'] = df.question1.apply(lambda x: str(x).lower().count('.'))
-    x['q2_count_symbol_dot'] = df.question2.apply(lambda x: str(x).lower().count('.'))
-    x['diff_count_symbol_dot'] = x['q1_count_symbol_dot'] - x['q2_count_symbol_dot']
-    # Upper count
-    x['q1_count_symbol_upper_letter'] = df.question1.apply(lambda x: sum(1 for c in str(x) if c.isupper()))
-    x['q2_count_symbol_upper_letter'] = df.question2.apply(lambda x: sum(1 for c in str(x) if c.isupper()))
-    x['diff_count_symbol_upper_letter'] = x['q1_count_symbol_upper_letter'] - x['q2_count_symbol_upper_letter']
-    # Is first upper
-    x['q1_is_first_upper_letter'] = df.question1.apply(lambda x: str(x)[0].isupper() if len(str(x)) else -1)
-    x['q2_is_first_upper_letter'] = df.question2.apply(lambda x: str(x)[0].isupper() if len(str(x)) else -1)
-    x['diff_is_first_upper_letter'] = x['q1_is_first_upper_letter'] - x['q2_is_first_upper_letter']
-    # Digit count
-    x['q1_count_symbol_digit'] = df.question1.apply(lambda x: sum(1 for c in str(x) if c.isdigit()))
-    x['q2_count_symbol_digit'] = df.question2.apply(lambda x: sum(1 for c in str(x) if c.isdigit()))
-    x['diff_count_symbol_digit'] = x['q1_count_symbol_digit'] - x['q2_count_symbol_digit']
-
-    #... YOUR FEATURES HERE ...
-
-    feature_names = list(x.columns.values)
-    create_feature_map(feature_names)
-    print("Features: {}".format(feature_names))
-
-    x_train = x[:df_train.shape[0]]
-    x_test = x[df_train.shape[0]:]
+    print('Building Features')
+    X_train = build_features(df_train, stops, weights)
+    X_train = pd.concat((X_train, X_train_ab, train_leaky), axis=1)
     y_train = df_train['is_duplicate'].values
-    del x, df_train, df, train_qs, counts, words
 
-    if False:  # Now we oversample the negative class - on your own risk of overfitting!
-        pos_train = x_train[y_train == 1]
-        neg_train = x_train[y_train == 0]
+    X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train, test_size=0.1, random_state=4242)
 
-        print("Oversampling started for proportion: {}".format(len(pos_train) / float(len(pos_train) + len(neg_train))))
-        p = 0.165
-        scale = ((len(pos_train) / float(len(pos_train) + len(neg_train))) / p) - 1
-        while scale > 1:
-            neg_train = pd.concat([neg_train, neg_train])
-            scale -= 1
-        neg_train = pd.concat([neg_train, neg_train[:int(scale * len(neg_train))]])
-        print("Oversampling done, new proportion: {}".format(len(pos_train) / float(len(pos_train) + len(neg_train))))
+    #UPDownSampling
+    pos_train = X_train[y_train == 1]
+    neg_train = X_train[y_train == 0]
+    X_train = pd.concat((neg_train, pos_train.iloc[:int(0.8*len(pos_train))], neg_train))
+    y_train = np.array([0] * neg_train.shape[0] + [1] * pos_train.iloc[:int(0.8*len(pos_train))].shape[0] + [0] * neg_train.shape[0])
+    print(np.mean(y_train))
+    del pos_train, neg_train
 
-        x_train = pd.concat([pos_train, neg_train])
-        y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist()
-        del pos_train, neg_train
+    pos_valid = X_valid[y_valid == 1]
+    neg_valid = X_valid[y_valid == 0]
+    X_valid = pd.concat((neg_valid, pos_valid.iloc[:int(0.8 * len(pos_valid))], neg_valid))
+    y_valid = np.array([0] * neg_valid.shape[0] + [1] * pos_valid.iloc[:int(0.8 * len(pos_valid))].shape[0] + [0] * neg_valid.shape[0])
+    print(np.mean(y_valid))
+    del pos_valid, neg_valid
 
-    print("Training data: X_train: {}, Y_train: {}, X_test: {}".format(x_train.shape, len(y_train), x_test.shape))
-    clr = train_xgb(x_train, y_train, params)
 
+    params = {}
+    params['objective'] = 'binary:logistic'
+    params['eval_metric'] = 'logloss'
+    params['eta'] = 0.02
+    params['max_depth'] = 7
+    params['subsample'] = 0.6
+    params['base_score'] = 0.2
+    # params['scale_pos_weight'] = 0.2
+
+    X_train.replace([np.inf, -np.inf], np.nan, inplace=True)
+    X_valid.replace([np.inf, -np.inf], np.nan, inplace=True)
+    d_train = xgb.DMatrix(X_train, label=y_train, missing=np.nan)
+    d_valid = xgb.DMatrix(X_valid, label=y_valid, missing=np.nan)
+
+    watchlist = [(d_train, 'train'), (d_valid, 'valid')]
+
+    bst = xgb.train(params, d_train, 2500, watchlist, early_stopping_rounds=50, verbose_eval=50)
+    print(log_loss(y_valid, bst.predict(d_valid)))
+    bst.save_model(args.save + '.mdl')
+
+
+    print('Building Test Features')
     import pdb
     pdb.set_trace()
+    df_test = pd.read_csv('../data/test_features_abhishek.csv', encoding="ISO-8859-1")
+    x_test_ab = df_test.iloc[:, 2:-1]
+    x_test_ab = x_test_ab.drop('euclidean_distance', axis=1)
+    x_test_ab = x_test_ab.drop('jaccard_distance', axis=1)
+    
+    df_test = pd.read_csv('../data/test.csv')
+    df_test = df_test.fillna(' ')
 
-    preds = predict_xgb(clr, x_test)
-
-    print("Writing output...")
+    df_test['question1'] = df_test['question1'].map(lambda x: str(x).lower().split())
+    df_test['question2'] = df_test['question2'].map(lambda x: str(x).lower().split())
+    
+    x_test = build_features(df_test, stops, weights)
+    x_test = pd.concat((x_test, x_test_ab, test_leaky), axis=1)
+    x_test.replace([np.inf, -np.inf], np.nan, inplace=True)
+    d_test = xgb.DMatrix(x_test, missing=np.nan)
+    p_test = bst.predict(d_test)
     sub = pd.DataFrame()
     sub['test_id'] = df_test['test_id']
-    sub['is_duplicate'] = preds
-    sub.to_csv("xgb_seed{}_n{}.csv".format(RS, ROUNDS), index=False)
+    sub['is_duplicate'] = p_test
+    sub.to_csv('../predictions/' + args.save + '.csv')
 
-    print("Features importances...")
-    importance = clr.get_fscore(fmap='xgb.fmap')
-    print(importance)
-    print(importance.items())
-    importance = sorted(importance.items(), key=operator.itemgetter(1))
-    ft = pd.DataFrame(importance, columns=['feature', 'fscore'])
-    print(ft)
-
-    ft.plot(kind='barh', x='feature', y='fscore', legend=False, figsize=(15, 30))
-    plt.gcf().savefig('features_importance.png')
-
-
-main()
-print("Done.")
+if __name__ == '__main__':
+    main()
