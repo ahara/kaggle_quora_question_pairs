@@ -7,8 +7,6 @@ from sklearn.model_selection import train_test_split
 from magic_feature_3 import magic_feature_3_with_load
 
 
-MISSING = -99999
-
 magic_3 = magic_feature_3_with_load()
 
 
@@ -20,7 +18,6 @@ def load_data(file_name):
 
 def get_train_validation_sets(testset=False):
     data = load_data('test_features_v3.csv' if testset else 'train_features_v3.csv')
-    data.fillna(MISSING, inplace=True)
 
     if testset:
         print 'Prepare test set'
@@ -63,8 +60,8 @@ if __name__ == '__main__':
     if submission_mode:
         params['scale_pos_weight'] = 0.165 / (1 - 0.165)
 
-    d_train = xgb.DMatrix(x_train, label=y_train, missing=MISSING)
-    d_valid = xgb.DMatrix(x_valid, label=y_valid, missing=MISSING)
+    d_train = xgb.DMatrix(x_train, label=y_train, missing=np.nan)
+    d_valid = xgb.DMatrix(x_valid, label=y_valid, missing=np.nan)
 
     watchlist = [(d_train, 'train'), (d_valid, 'valid')]
 
@@ -83,7 +80,7 @@ if __name__ == '__main__':
 
     x_test, test_id = get_train_validation_sets(testset=True)
 
-    xgb_preds = bst.predict(xgb.DMatrix(x_test, missing=MISSING))
+    xgb_preds = bst.predict(xgb.DMatrix(x_test, missing=np.nan))
 
     print("Writing output...")
     sub = pd.DataFrame()
