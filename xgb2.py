@@ -312,7 +312,7 @@ def main():
     sub = pd.DataFrame()
     sub['test_id'] = df_test['test_id']
     sub['is_duplicate'] = p_test
-    sub.to_csv('../predictions/' + args.save + '.csv')
+    sub.to_csv(args.save + '.csv')
 
 if __name__ == '__main__':
     main()
