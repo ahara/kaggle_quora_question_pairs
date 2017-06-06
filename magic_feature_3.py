@@ -13,8 +13,7 @@ def magic_feature_3_with_load():
 
 
 def magic_feature_3(train_orig, test_orig):
-    cores_dict = pd.read_csv("../data/question_max_kcores.csv", index_col="qid",
-                             encoding='utf-8').to_dict()["max_kcore"]
+    cores_dict = pd.read_csv("../data/question_max_kcores.csv", index_col="qid").to_dict()["max_kcore"]
 
     def gen_qid1_max_kcore(x):
         return cores_dict[hash(x)]
@@ -61,7 +60,9 @@ def get_id(question, dict_questions):
         return new_id, new_id
 
 
-def run_kcore(df_train, df_test):
+def run_kcore():
+    df_train = pd.read_csv("../data/train.csv", encoding='utf-8')
+    df_test = pd.read_csv("../data/test.csv", encoding='utf-8')
     df_train.loc[:, 'qid1'] = df_train.loc[:, 'question1'].apply(hash)
     df_train.loc[:, 'qid2'] = df_train.loc[:, 'question2'].apply(hash)
     df_test.loc[:, 'qid1'] = df_test.loc[:, 'question1'].apply(hash)
@@ -92,18 +93,16 @@ def run_kcore(df_train, df_test):
         df_output[fieldname] = 0
         df_output.ix[df_output.qid.isin(ck), fieldname] = k
 
-    df_output.to_csv("../data/question_kcores.csv", index=None, encoding='utf-8')
+    df_output.to_csv("../data/question_kcores.csv", index=None)
 
 
 def run_kcore_max():
-    df_cores = pd.read_csv("../data/question_kcores.csv", index_col="qid", encoding='utf-8')
+    df_cores = pd.read_csv("../data/question_kcores.csv", index_col="qid")
     df_cores.index.names = ["qid"]
     df_cores.loc[:, 'max_kcore'] = df_cores.apply(lambda row: max(row), axis=1)
-    df_cores.loc[:, ['max_kcore']].to_csv("../data/question_max_kcores.csv", encoding='utf-8')  # with index
+    df_cores.loc[:, ['max_kcore']].to_csv("../data/question_max_kcores.csv")  # with index
 
 
 if __name__ == '__main__':
-    df_train = pd.read_csv("../data/train.csv", encoding='utf-8')
-    df_test = pd.read_csv("../data/test.csv", encoding='utf-8')
-    run_kcore(df_train, df_test)
+    run_kcore()
     run_kcore_max()

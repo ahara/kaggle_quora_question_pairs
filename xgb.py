@@ -15,7 +15,7 @@ def load_data(file_name):
 
 
 def get_train_validation_sets(testset=False):
-    data = load_data('test_features_v4.csv' if testset else 'train_features_v4.csv')
+    data = load_data('test_features_v3.csv' if testset else 'train_features_v3.csv')
     data.fillna(MISSING, inplace=True)
 
     if testset:
