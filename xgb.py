@@ -10,13 +10,33 @@ from magic_feature_3 import magic_feature_3_with_load
 magic_3 = magic_feature_3_with_load()
 
 
+def rebalance_data(x_train, y_train):
+    pos_train = x_train[y_train == 1]
+    neg_train = x_train[y_train == 0]
+
+    # Now we oversample the negative class
+    # There is likely a much more elegant way to do this...
+    p = 0.165
+    scale = ((len(pos_train) / (len(pos_train) + len(neg_train))) / p) - 1
+    while scale > 1:
+        neg_train = pd.concat([neg_train, neg_train])
+        scale -=1
+    neg_train = pd.concat([neg_train, neg_train[:int(scale * len(neg_train))]])
+    print(len(pos_train) / (len(pos_train) + len(neg_train)))
+
+    x_train = pd.concat([pos_train, neg_train])
+    y_train = (np.zeros(len(pos_train)) + 1).tolist() + np.zeros(len(neg_train)).tolist()
+
+    return x_train, y_train
+
+
 def load_data(file_name):
     data = pd.read_csv('../data/%s' % file_name, encoding='utf-8')
 
     return data
 
 
-def get_train_validation_sets(testset=False):
+def get_train_validation_sets(testset=False, rebalance=False):
     data = load_data('test_features_v3.csv' if testset else 'train_features_v3.csv')
 
     if testset:
@@ -35,14 +55,17 @@ def get_train_validation_sets(testset=False):
         x_train.loc[:, 'm3_qid1_max_kcore'] = magic_3['train'].loc[:, 'm3_qid1_max_kcore']
         x_train.loc[:, 'm3_qid2_max_kcore'] = magic_3['train'].loc[:, 'm3_qid2_max_kcore']
 
+        if rebalance:
+            x_train, y_train = rebalance_data(x_train, y_train)
+
         x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2, random_state=4242)
 
         return x_train, x_valid, y_train, y_valid
 
 
 if __name__ == '__main__':
-    submission_mode = True
-    x_train, x_valid, y_train, y_valid = get_train_validation_sets()
+    submission_mode = False
+    x_train, x_valid, y_train, y_valid = get_train_validation_sets(rebalance=True)
 
     # Set our parameters for xgboost
     if submission_mode:
