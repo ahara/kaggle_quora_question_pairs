@@ -2,7 +2,7 @@ import pandas as pd
 
 xgb_preds = pd.read_csv('xgb_preds.csv')
 xgb_over = pd.read_csv('xgb_preds_oversample.csv')
-sgd_fm = pd.read_csv('../kaggle_quora_benchmark/sgd_fm.csv')
+sgd_fm = pd.read_csv('../kaggle_quora_benchmark/sgd_fm.csv')  # Created based on https://github.com/qqgeogor/kaggle_quora_benchmark
 
 sub = pd.DataFrame()
 sub['test_id'] = xgb_preds['test_id']
